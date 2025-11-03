@@ -35,8 +35,6 @@ class LinearModule(object):
           input_layer: boolean, True if this is the first layer after the input, else False.
 
         TODO:
-        Initialize weight parameters using Kaiming initialization. 
-        Initialize biases with zeros.
         Hint: the input_layer argument might be needed for the initialization
 
         Also, initialize gradients with zeros.
@@ -51,6 +49,22 @@ class LinearModule(object):
         # PUT YOUR CODE HERE  #
         #######################
 
+        # initialize a weight matrix of zeros that maps from (X x in_features) to (X x out_features)
+        kaiming_mean = 0
+        kaiming_std_dev = np.sqrt(2/in_features)  # number of input connections to that neuron
+        W = np.random.normal(loc=kaiming_mean, scale=kaiming_std_dev, size=(out_features, in_features))
+        self.params['weight'] = W
+
+        # initialize a bias matrix of zeros with the same shape as output vector
+        B = np.zeros(shape=(out_features, ))
+        self.params['bias'] = B
+
+        ## gradients
+        self.grads['weight'] = None
+        self.grads['bias'] = None
+
+        self.cache = None
+        
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -63,16 +77,16 @@ class LinearModule(object):
           x: input to the module
         Returns:
           out: output of the module
-
-        TODO:
-        Implement forward pass of the module.
-
-        Hint: You can store intermediate variables inside the object. They can be used in backward pass computation.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+
+        # z = xW^T + b
+        out = x.dot(self.params['weight']).T + self.params['bias']  # shape (batch_size, out_features)
+        
+        self.cache = x # store, because we will later do backward pass using d../d.. = ...
 
         #######################
         # END OF YOUR CODE    #
@@ -88,15 +102,24 @@ class LinearModule(object):
           dout: gradients of the previous module
         Returns:
           dx: gradients with respect to the input of the module
-
-        TODO:
-        Implement backward pass of the module. Store gradient of the loss with respect to
-        layer parameters in self.grads['weight'] and self.grads['bias'].
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        A = self.cache
+        W = self.params['weight']
+
+        ## Update parameters
+        # param 1: dL/dW = dZ/dW . dL/dZ = A^T . dout
+        self.grads['weight'] = A.T.dot(dout)
+
+        # param 2: dL/dB = dL/dZ . dZ/dB = (1 1 ... 1)^T . dout
+        self.grads['bias'] = np.sum(dout, axis=0)  # sum over batch dimension
+
+        ## Compute dx, the gradient that will be passed further to the previous layer
+        # dL/dZ = dL/dout . dout/dZ = dout . W
+        dx = dout.dot(W.T)
 
         #######################
         # END OF YOUR CODE    #
@@ -107,14 +130,11 @@ class LinearModule(object):
         """
         Remove any saved tensors for the backward pass.
         Used to clean-up model from any remaining input data when we want to save it.
-
-        TODO:
-        Set any caches you have to None.
         """
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -136,16 +156,14 @@ class ELUModule(object):
           x: input to the module
         Returns:
           out: output of the module
-
-        TODO:
-        Implement forward pass of the module.
-        
-        Hint: You can store intermediate variables inside the object. They can be used in backward pass computation.
         """
         
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        out = np.where(x > 0, x, self.alpha * (np.exp(x) - 1)) # following formula found in https://www.geeksforgeeks.org/deep-learning/elu-activation-function-in-neural-network/
+
+        self.cache = x
 
         #######################
         # END OF YOUR CODE    #
@@ -160,14 +178,18 @@ class ELUModule(object):
           dout: gradients of the previous module
         Returns:
           dx: gradients with respect to the input of the module
-
-        TODO:
-        Implement backward pass of the module.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        Z = self.cache
+
+        local_grad = np.where(Z > 0, 1, self.alpha * np.exp(Z))
+
+        ## Compute dx, the gradient that will be passed further to the previous layer
+        # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = ...
+        dx = np.multiply(dout, local_grad)
 
         #######################
         # END OF YOUR CODE    #
@@ -178,14 +200,11 @@ class ELUModule(object):
         """
         Remove any saved tensors for the backward pass.
         Used to clean-up model from any remaining input data when we want to save it.
-
-        TODO:
-        Set any caches you have to None.
         """
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -203,18 +222,25 @@ class SoftMaxModule(object):
           x: input to the module
         Returns:
           out: output of the module
-
-        TODO:
-        Implement forward pass of the module.
-        To stabilize computation you should use the so-called Max Trick - https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/
-
-        Hint: You can store intermediate variables inside the object. They can be used in backward pass computation.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        def shift_and_exp(x):
+          shift_value = np.max(x) # shift by scalar b such that the softmax output becomes shift-invariant
+          y = np.exp(x - shift_value) # reasonable choice according to https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/
+          return y
 
+        # 1. get matrix of row sums of same shape as x
+        x_shifted_and_exp = shift_and_exp(x) # e to the power each entry
+        x_shifted_and_exp_row_sum = np.sum(x_shifted_and_exp, axis=1, keepdims=True) # sum over exponents, should collapse from (S x N) to (S, )
+        x_shifted_and_exp_row_sum_matrix = np.hstack((x_shifted_and_exp_row_sum, ) * x.shape[1]) # populate with N times the second dim (many times the same sum of exponents)
+
+        # 2. do pair-wise division of x by matrix_row_sum
+        if x_shifted_and_exp.shape != x_shifted_and_exp_row_sum_matrix.shape:
+            raise ValueError("Mistake in implementation: Shape of input does not match shape of element-wise division for softmax.")
+        out = x_shifted_and_exp / x_shifted_and_exp_row_sum_matrix
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -228,14 +254,14 @@ class SoftMaxModule(object):
           dout: gradients of the previous modul
         Returns:
           dx: gradients with respect to the input of the module
-
-        TODO:
-        Implement backward pass of the module.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        ## Compute dx, the gradient that will be passed further to the previous layer
+        # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
+        dx = dout # in spite of formula above, we only apply the formula once in the CE module, so we don't do this step twice (simply passthrough).
 
         #######################
         # END OF YOUR CODE    #
@@ -254,7 +280,7 @@ class SoftMaxModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.cache = None
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -273,14 +299,17 @@ class CrossEntropyModule(object):
           y: labels of the input
         Returns:
           out: cross entropy loss
-
-        TODO:
-        Implement forward pass of the module.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        # turn y into a one-hot encoded matrix with same shape as x
+        n_classes = x.shape[1]
+        y_onehot = np.eye(n_classes)[y]
+        
+        ce_entries = (np.multiply(y_onehot, - np.log(x))) # each entry contains the element y_i,j * log(y_pred_i,j)
+        out = np.mean(ce_entries) # scalar
 
         #######################
         # END OF YOUR CODE    #
@@ -296,14 +325,19 @@ class CrossEntropyModule(object):
           y: labels of the input
         Returns:
           dx: gradient of the loss with the respect to the input x.
-
-        TODO:
-        Implement backward pass of the module.
         """
+        # get values from cache
+        Y_pred = x
+        n_classes = x.shape[1]
+        Y_onehot = np.eye(n_classes)[y] 
+        batch_size = x.shape[0]
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        ## Compute dx, the gradient that will be passed further to the previous layer
+        # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
+        dx = (Y_pred - Y_onehot) / batch_size
 
         #######################
         # END OF YOUR CODE    #

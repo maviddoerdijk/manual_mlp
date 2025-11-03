@@ -44,15 +44,24 @@ class MLP(object):
           n_classes: number of classes of the classification problem.
                      This number is required in order to specify the
                      output dimensions of the MLP
-
-        TODO:
-        Implement initialization of the network.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        # Linear module - maps from n_inputs(=10) to n_hidden(=128)
+        self.lin_mod1 = LinearModule(in_features=n_inputs, out_features=n_hidden, input_layer=True) # TODO: not sure what kind of difference input layer makes, likely only has to do with initialization of weights?
+
+        # ELU
+        self.elu = ELUModule(alpha=1) # TODO: Make choice on (1) hard-code alpha (2 - favorite ) be able to choose it in init as hyperparam (3) other?
+        # Note: pytorch uses standard value of alpha=1, so we use that here as well.
+
+        # Linear module - maps from n_hidden(=128) to n_classes(=5)
+        self.lin_mod2 = LinearModule(in_features=n_hidden, out_features=n_classes)
+
+        # Softmax activation
+        self.softmax = SoftMaxModule()
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -66,18 +75,19 @@ class MLP(object):
           x: input to the network
         Returns:
           out: outputs of the network
-
-        TODO:
-        Implement forward pass of the network.
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+        # Linear module - maps from n_inputs(=10) to n_hidden(=128)
+        z1 = self.lin_mod1.forward(x)
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        # ELU
+        a1_elu = self.elu.forward(z1)
+
+        # Linear module - maps from n_hidden(=128) to n_classes(=5)
+        z2 = self.lin_mod2.forward(a1_elu)
+
+        # Softmax activation
+        out = self.softmax.forward(z2)       
 
         return out
 
@@ -87,15 +97,24 @@ class MLP(object):
 
         Args:
           dout: gradients of the loss
-
-        TODO:
-        Implement backward pass of the network.
         """
 
         #######################
         # PUT YOUR CODE HERE  #
-        #######################
-        pass
+        ####################### 
+                
+        # calculate dz2
+        dz2 = self.softmax.backward(dout=dout) # updates W2
+
+        # calculate d a1_elu
+        da1_elu = self.lin_mod2.backward(dout=dz2)
+
+        # calculate dz1
+        self.elu.backward(dout=da1_elu) # updates W1 - not saving to dz1, because that takes up more memory
+
+        # we COULD calculate dx here, but don't need to because all weights and biases have been updated
+        # dx = self.lin_mod1.backward(dout=dz1) # leave commented out
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -104,15 +123,15 @@ class MLP(object):
         """
         Remove any saved tensors for the backward pass from any module.
         Used to clean-up model from any remaining input data when we want to save it.
-
-        TODO:
-        Iterate over modules and call the 'clear_cache' function.
         """
         
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        self.lin_mod1.clear_cache()
+        self.lin_mod2.clear_cache()
+        self.elu.clear_cache()
+        self.softmax.clear_cache
         #######################
         # END OF YOUR CODE    #
         #######################
