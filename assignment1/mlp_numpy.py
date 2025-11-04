@@ -50,14 +50,14 @@ class MLP(object):
         # PUT YOUR CODE HERE  #
         #######################
         # Linear module - maps from n_inputs(=10) to n_hidden(=128)
-        self.lin_mod1 = LinearModule(in_features=n_inputs, out_features=n_hidden, input_layer=True) # TODO: not sure what kind of difference input layer makes, likely only has to do with initialization of weights?
+        self.lin_mod1 = LinearModule(in_features=n_inputs, out_features=n_hidden[0], input_layer=True) # TODO: not sure what kind of difference input layer makes, likely only has to do with initialization of weights?
 
         # ELU
         self.elu = ELUModule(alpha=1) # TODO: Make choice on (1) hard-code alpha (2 - favorite ) be able to choose it in init as hyperparam (3) other?
         # Note: pytorch uses standard value of alpha=1, so we use that here as well.
 
         # Linear module - maps from n_hidden(=128) to n_classes(=5)
-        self.lin_mod2 = LinearModule(in_features=n_hidden, out_features=n_classes)
+        self.lin_mod2 = LinearModule(in_features=n_hidden[0], out_features=n_classes)
 
         # Softmax activation
         self.softmax = SoftMaxModule()

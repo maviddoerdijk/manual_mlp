@@ -137,23 +137,54 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
 
     # Loading the dataset
     cifar10 = cifar10_utils.get_cifar10(data_dir)
-    cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
-                                                  return_numpy=False)
+    # cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
+    #                                               return_numpy=False)
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    # Create more useful dataloaders than the one above
+    train_loader = cifar10_utils.get_dataloader(cifar10['train'], batch_size=batch_size, return_numpy=True, shuffle=True)
+    val_loader = cifar10_utils.get_dataloader(cifar10['validation'], batch_size=batch_size, return_numpy=True, shuffle=False)
+    test_loader = cifar10_utils.get_dataloader(cifar10['test'], batch_size=batch_size, return_numpy=True, shuffle=False)
+    
+    n_inputs = 32*32*3 # should be okay to hardcode, since it's common knowledge that CIFAR is RGB of 32x32 images
+    n_classes = 10
+    model = MLP(n_inputs=n_inputs, n_hidden=hidden_dims, n_classes=n_classes, use_batch_norm=use_batch_norm)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=lr)
+    
+    val_accuracies = []
+    logging_dict = {}
+    best_model = None # we need to return the model that worked best on dataset
+    best_val_accuracy = 0.0
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    # TODO: Do optimization with the simple SGD optimizer
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    # Training loop including validation
+    for epoch in tqdm(range(epochs)):
+      model.train()
+      for train_inputs, labels in train_loader:
+          preds = model(train_inputs)
+          loss = loss_fn(preds, labels)
+          # train steps
+          loss.backward() # behind the hood, this computes the gradients
+          optimizer.step()
+          acc = accuracy(preds, labels)
+      # avg_train_loss = epoch_loss / num_samples # seems like a weird way
+
+      
+      model.eval()
+      val_accuracy = evaluate_model(model, val_loader)
+      val_accuracies.append(val_accuracy)
+
+      if best_model is None or val_accuracy > best_val_accuracy:
+          best_val_accuracy = val_accuracy
+          best_model = deepcopy(model) # this is what the hint suggested
+
+    print("Training finished. Evaluating on test set...")
+    test_accuracy = evaluate_model(best_model, test_loader, device)
+    print(f"Best Validation Accuracy achieved: {best_val_accuracy:.4f}")
+    print(f"Test Accuracy of best model: {test_accuracy:.4f}")
+
     #######################
     # END OF YOUR CODE    #
     #######################

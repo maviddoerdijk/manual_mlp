@@ -7,7 +7,7 @@ np.random.seed(42)
 
 # 1. buncha random data creation
 n_inputs = 10 
-n_hidden = 128
+n_hidden = [128]
 n_classes = 5 # say we are doing classification with 5 classes (since we'll have implemented softmax in the end)
 batch_size = 4
 x = np.random.randn(batch_size, n_inputs) # gives arr of shape (4, 10)
@@ -16,7 +16,7 @@ print(y_true)
 
 # 2. create MLP and initialize a bunch of objects
 # we want to have (one layer, 128 hidden units, 10 epochs, learning rate 0.1, seed 42)
-mlp = MLP(n_inputs=n_inputs, n_hidden=n_hidden, n_classes=n_classes)
+mlp = MLP(n_inputs=n_inputs, n_hidden=n_hidden, n_classes=n_classes) # TODO: Change n_inputs BACK to a list of ints!
 loss_fn = CrossEntropyModule()
 epochs = 10
 learning_rate = 0.1

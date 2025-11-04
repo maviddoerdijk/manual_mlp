@@ -82,7 +82,7 @@ class TestLosses(unittest.TestCase):
             
             f = lambda _: CrossEntropyModule().forward(X, y)
             grads_num = eval_numerical_gradient(f, X, verbose=False, h=1e-5)
-            self.assertLess(rel_error(grads_num, grads), rel_error_max)
+            self.assertLess(rel_error(grads_num, grads), rel_error_max) # check that the difference between my gradients are close to numerical gradients
 
 
 class TestLayers(unittest.TestCase):

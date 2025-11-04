@@ -51,7 +51,7 @@ class MLP(nn.Module):
         TODO:
         Implement module setup of the network.
         The linear layer have to initialized according to the Kaiming initialization.
-        Add the Batch-Normalization _only_ is use_batch_norm is True.
+        Add the Batch-Normalization _only_ if use_batch_norm is True.
         
         Hint: No softmax layer is needed here. Look at the CrossEntropyLoss module for loss calculation.
         """
@@ -59,7 +59,12 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        
+        all_linear_layers = [nn.Linear(in_features=n_hidden[i], out_features=n_hidden[i+1]) for i in range(len(n_hidden) - 1)]
+        all_linear_layers.append(nn.Linear(in_features=n_hidden[-1], out_features=n_classes))
+
+        # Softmax activation ("No softmax is needed here"??)
+
         #######################
         # END OF YOUR CODE    #
         #######################

@@ -84,7 +84,7 @@ class LinearModule(object):
         #######################
 
         # z = xW^T + b
-        out = x.dot(self.params['weight']).T + self.params['bias']  # shape (batch_size, out_features)
+        out = x.dot(self.params['weight'].T) + self.params['bias']  # shape (batch_size, out_features)
         
         self.cache = x # store, because we will later do backward pass using d../d.. = ...
 
@@ -119,7 +119,7 @@ class LinearModule(object):
 
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dL/dZ = dL/dout . dout/dZ = dout . W
-        dx = dout.dot(W.T)
+        dx = dout.dot(W)
 
         #######################
         # END OF YOUR CODE    #
@@ -308,8 +308,13 @@ class CrossEntropyModule(object):
         n_classes = x.shape[1]
         y_onehot = np.eye(n_classes)[y]
         
-        ce_entries = (np.multiply(y_onehot, - np.log(x))) # each entry contains the element y_i,j * log(y_pred_i,j)
-        out = np.mean(ce_entries) # scalar
+        epsilon = 1e-15 # to avoid log(0)
+        ce_entries = (np.multiply(y_onehot, - np.log(x + epsilon))) # each entry contains the element y_i,j * log(y_pred_i,j)
+
+        # get loss for each sample in the batch
+        sample_losses = np.sum(ce_entries, axis=1) # axis=1 assumes rows are samples, columns are classes
+
+        out = np.mean(sample_losses) # scalar
 
         #######################
         # END OF YOUR CODE    #
