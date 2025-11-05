@@ -51,7 +51,8 @@ class LinearModule(object):
 
         # initialize a weight matrix of zeros that maps from (X x in_features) to (X x out_features)
         kaiming_mean = 0
-        kaiming_std_dev = np.sqrt(2/in_features)  # number of input connections to that neuron
+        magic_number = 1.0 if input_layer else 2.0
+        kaiming_std_dev = np.sqrt(magic_number/in_features)  # number of input connections to that neuron
         W = np.random.normal(loc=kaiming_mean, scale=kaiming_std_dev, size=(out_features, in_features))
         self.params['weight'] = W
 
@@ -84,7 +85,7 @@ class LinearModule(object):
         #######################
 
         # z = xW^T + b
-        out = x.dot(self.params['weight'].T) + self.params['bias']  # shape (batch_size, out_features)
+        out = x @ self.params['weight'].T + self.params['bias']  # shape (batch_size, out_features)
         
         self.cache = x # store, because we will later do backward pass using d../d.. = ...
 
@@ -107,19 +108,19 @@ class LinearModule(object):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        A = self.cache
+        X = self.cache
         W = self.params['weight']
 
         ## Update parameters
         # param 1: dL/dW = dZ/dW . dL/dZ = A^T . dout
-        self.grads['weight'] = A.T.dot(dout)
+        self.grads['weight'] = dout.T @ X
 
         # param 2: dL/dB = dL/dZ . dZ/dB = (1 1 ... 1)^T . dout
         self.grads['bias'] = np.sum(dout, axis=0)  # sum over batch dimension
 
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dL/dZ = dL/dout . dout/dZ = dout . W
-        dx = dout.dot(W)
+        dx = dout @ W
 
         #######################
         # END OF YOUR CODE    #
@@ -241,6 +242,8 @@ class SoftMaxModule(object):
         if x_shifted_and_exp.shape != x_shifted_and_exp_row_sum_matrix.shape:
             raise ValueError("Mistake in implementation: Shape of input does not match shape of element-wise division for softmax.")
         out = x_shifted_and_exp / x_shifted_and_exp_row_sum_matrix
+        
+        self.cache = out
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -261,7 +264,9 @@ class SoftMaxModule(object):
         #######################
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
-        dx = dout # in spite of formula above, we only apply the formula once in the CE module, so we don't do this step twice (simply passthrough).
+        s = self.cache
+        dot_product = np.sum(dout * s, axis=1, keepdims=True)
+        dx = s * (dout - dot_product)
 
         #######################
         # END OF YOUR CODE    #
@@ -305,16 +310,15 @@ class CrossEntropyModule(object):
         # PUT YOUR CODE HERE  #
         #######################
         # turn y into a one-hot encoded matrix with same shape as x
+        batch_size = x.shape[0]
         n_classes = x.shape[1]
         y_onehot = np.eye(n_classes)[y]
         
-        epsilon = 1e-15 # to avoid log(0)
-        ce_entries = (np.multiply(y_onehot, - np.log(x + epsilon))) # each entry contains the element y_i,j * log(y_pred_i,j)
+        epsilon = 1e-8 # to avoid log(0)
+        ce_entries = y_onehot * np.log(x + epsilon)
 
         # get loss for each sample in the batch
-        sample_losses = np.sum(ce_entries, axis=1) # axis=1 assumes rows are samples, columns are classes
-
-        out = np.mean(sample_losses) # scalar
+        out = - np.sum(ce_entries) / batch_size 
 
         #######################
         # END OF YOUR CODE    #
@@ -342,7 +346,7 @@ class CrossEntropyModule(object):
         #######################
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
-        dx = (Y_pred - Y_onehot) / batch_size
+        dx = -(Y_onehot / Y_pred) / batch_size
 
         #######################
         # END OF YOUR CODE    #

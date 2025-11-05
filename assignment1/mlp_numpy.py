@@ -66,6 +66,9 @@ class MLP(object):
         # END OF YOUR CODE    #
         #######################
 
+    def __call__(self, args, *kwargs):
+        return self.forward(args, *kwargs) # custom call to make our class more similar to pytorch
+
     def forward(self, x):
         """
         Performs forward pass of the input. Here an input tensor x is transformed through

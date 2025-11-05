@@ -46,14 +46,17 @@ def accuracy(predictions, targets):
     Returns:
       accuracy: scalar float, the accuracy of predictions,
                 i.e. the average correct predictions over the whole batch
-    
-    TODO:
-    Implement accuracy computation.
     """
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+
+    # Get the predicted class index by finding the max logit
+    pred_labels = torch.argmax(predictions, dim=1) # use dim=1 to get max per row (find )
+    correct = pred_labels.eq(targets).sum().item()
+    
+    accuracy = correct / len(targets)
 
     #######################
     # END OF YOUR CODE    #
@@ -71,17 +74,28 @@ def evaluate_model(model, data_loader):
       data_loader: The data loader of the dataset to evaluate.
     Returns:
       avg_accuracy: scalar float, the average accuracy of the model on the dataset.
-
-    TODO:
-    Implement evaluation of the MLP model on a given dataset.
-
-    Hint: make sure to return the average accuracy of the whole dataset, 
-          independent of batch sizes (not all batches might be the same size).
     """
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+
+    total_correct = 0
+    total_samples = 0
+    model.eval()
+    
+    with torch.no_grad():
+        for inputs, targets in data_loader:
+            inputs = inputs.view(inputs.size(0), -1) # flatten from standard [B, 3, 32, 32] (CIFAR-10) to [B, 3*32*32]
+            
+            predictions = model(inputs)
+            
+            # get accuracy of the batch
+            pred_labels = torch.argmax(predictions, dim=1)
+            total_correct += pred_labels.eq(targets).sum().item()
+            total_samples += len(targets)
+            
+        avg_accuracy = total_correct / total_samples # use total samples so that the average accuracy is independent of batch size
 
     #######################
     # END OF YOUR CODE    #
@@ -110,17 +124,6 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
                      performed best on the validation.
       logging_dict: An arbitrary object containing logging information. This is for you to 
                     decide what to put in here.
-
-    TODO:
-    - Implement the training of the MLP model. 
-    - Evaluate your model on the whole validation set each epoch.
-    - After finishing training, evaluate your model that performed best on the validation set, 
-      on the whole test dataset.
-    - Integrate _all_ input arguments of this function in your training. You are allowed to add
-      additional input argument if you assign it a default value that represents the plain training
-      (e.g. '..., new_param=False')
-
-    Hint: you can save your best model by deepcopy-ing it.
     """
 
     # Set the random seeds for reproducibility
@@ -133,20 +136,19 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
         torch.backends.cudnn.benchmark = False
 
     # Set default device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # TODO: actually use this
 
     # Loading the dataset
     cifar10 = cifar10_utils.get_cifar10(data_dir)
-    # cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
-    #                                               return_numpy=False)
+    cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
+                                                  return_numpy=False)
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-    # Create more useful dataloaders than the one above
-    train_loader = cifar10_utils.get_dataloader(cifar10['train'], batch_size=batch_size, return_numpy=True, shuffle=True)
-    val_loader = cifar10_utils.get_dataloader(cifar10['validation'], batch_size=batch_size, return_numpy=True, shuffle=False)
-    test_loader = cifar10_utils.get_dataloader(cifar10['test'], batch_size=batch_size, return_numpy=True, shuffle=False)
+    train_loader = cifar10_loader['train']
+    val_loader = cifar10_loader['validation']
+    test_loader = cifar10_loader['test']
     
     n_inputs = 32*32*3 # should be okay to hardcode, since it's common knowledge that CIFAR is RGB of 32x32 images
     n_classes = 10
@@ -155,7 +157,12 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     optimizer = optim.SGD(model.parameters(), lr=lr)
     
     val_accuracies = []
-    logging_dict = {}
+    logging_dict = {
+        'train_accuracies': [],
+        'train_losses': [],
+        'val_accuracies': [],
+        'val_losses': []
+    }
     best_model = None # we need to return the model that worked best on dataset
     best_val_accuracy = 0.0
 
@@ -163,28 +170,38 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     for epoch in tqdm(range(epochs)):
       model.train()
       for train_inputs, labels in train_loader:
-          preds = model(train_inputs)
+          # flatten inputs
+          train_inputs = train_inputs.view(train_inputs.size(0), -1) # flatten from [B, 3, 32, 32] to [B, 3*32*32]
+          optimizer.zero_grad() # reset gradients
+
+          preds = model.forward(train_inputs) # TODO: Check if this contains inputs as expected: flat inputs, without onehot-encoding, etc
           loss = loss_fn(preds, labels)
           # train steps
-          loss.backward() # behind the hood, this computes the gradients
-          optimizer.step()
+          loss.backward() # compute gradients
+          optimizer.step() # update weights (optimizer was given model.parameters())
           acc = accuracy(preds, labels)
+          logging_dict['train_accuracies'].append(acc)
+          logging_dict['train_losses'].append(loss.item())
       # avg_train_loss = epoch_loss / num_samples # seems like a weird way
 
       
-      model.eval()
       val_accuracy = evaluate_model(model, val_loader)
-      val_accuracies.append(val_accuracy)
+      logging_dict['val_losses'].append(loss.item())
+      val_accuracies.append(val_accuracy) # kind of double to do this, but it's fine
 
       if best_model is None or val_accuracy > best_val_accuracy:
           best_val_accuracy = val_accuracy
           best_model = deepcopy(model) # this is what the hint suggested
 
     print("Training finished. Evaluating on test set...")
-    test_accuracy = evaluate_model(best_model, test_loader, device)
+    test_accuracy = evaluate_model(best_model, test_loader)
     print(f"Best Validation Accuracy achieved: {best_val_accuracy:.4f}")
     print(f"Test Accuracy of best model: {test_accuracy:.4f}")
 
+    logging_dict['test_accuracy'] = test_accuracy
+    logging_dict['val_accuracies'] = val_accuracies
+
+    model = best_model
     #######################
     # END OF YOUR CODE    #
     #######################
