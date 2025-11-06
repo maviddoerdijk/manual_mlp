@@ -174,7 +174,7 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
           train_inputs = train_inputs.view(train_inputs.size(0), -1) # flatten from [B, 3, 32, 32] to [B, 3*32*32]
           optimizer.zero_grad() # reset gradients
 
-          preds = model.forward(train_inputs) # TODO: Check if this contains inputs as expected: flat inputs, without onehot-encoding, etc
+          preds = model(train_inputs)
           loss = loss_fn(preds, labels)
           # train steps
           loss.backward() # compute gradients
@@ -187,7 +187,8 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
       
       val_accuracy = evaluate_model(model, val_loader)
       logging_dict['val_losses'].append(loss.item())
-      val_accuracies.append(val_accuracy) # kind of double to do this, but it's fine
+      val_accuracies.append(val_accuracy) 
+      print(f"\nValidation accuracy at epoch {epoch}: {val_accuracy}")
 
       if best_model is None or val_accuracy > best_val_accuracy:
           best_val_accuracy = val_accuracy

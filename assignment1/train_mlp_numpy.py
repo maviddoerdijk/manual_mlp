@@ -45,15 +45,15 @@ def accuracy(predictions, targets):
     Returns:
       accuracy: scalar float, the accuracy of predictions between 0 and 1,
                 i.e. the average correct predictions over the whole batch
-
-    TODO:
-    Implement accuracy computation.
     """
 
     #######################
     # PUT YOUR CODE HERE  #
     #######################
-
+    pred_labels = np.argmax(predictions, axis=1)
+    correct = np.equal(pred_labels, targets).sum().item()
+    
+    accuracy = correct / len(targets)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -81,6 +81,19 @@ def evaluate_model(model, data_loader):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    total_correct = 0
+    total_samples = 0
+
+    for inputs, labels in data_loader:
+        inputs = inputs.reshape(inputs.shape[0], -1) # flatten with np
+        preds = model(inputs)
+
+        # get accuracy of the batch
+        pred_labels = np.argmax(preds, axis=1)
+        total_correct += np.equal(pred_labels, labels).sum().item()
+        total_samples += len(labels)
+
+    avg_accuracy = total_correct / total_samples
 
     #######################
     # END OF YOUR CODE    #
@@ -134,15 +147,62 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     # PUT YOUR CODE HERE  #
     #######################
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_dict = ...
+    train_loader = cifar10_loader['train']
+    val_loader = cifar10_loader['validation']
+    test_loader = cifar10_loader['test']
+    
+    n_inputs = 32*32*3 # should be okay to hardcode, since it's common knowledge that CIFAR is RGB of 32x32 images
+    n_classes = 10
+    model = MLP(n_inputs = n_inputs, n_hidden=hidden_dims, n_classes=n_classes)
+    loss_module = CrossEntropyModule()
+
+    val_accuracies = []
+    logging_dict = {
+        'train_accuracies': [],
+        'train_losses': [],
+        'val_accuracies': [],
+        'val_losses': []
+    }
+    best_model = None # we need to return the model that worked best on dataset
+    best_val_accuracy = 0.0
+
+    for epoch in tqdm(range(epochs)):
+        for inputs, labels in train_loader:
+            inputs = inputs.reshape(inputs.shape[0],-1) # [B, 3, 32, 32] -> [B, 3*32*32]
+            preds = model(inputs) # call model directly because we implemented the __call__ function ourselves so that it works like pytorch
+            loss = loss_module.forward(preds, labels) # softmax output -> CE loss
+
+            acc = accuracy(preds, labels)
+            logging_dict['train_accuracies'].append(acc)
+            logging_dict['train_losses'].append(loss.item())
+
+            # backprop
+            loss_gradient = loss_module.backward(preds, labels) # gradient of loss w.r.t. softmax output
+            _ = model.backward(loss_gradient) # should do backprop and update all weights accordingly
+            # update gradients - update after entire batch
+            model.lin_mod1.params['weight'] = model.lin_mod1.params['weight'] - lr * model.lin_mod1.grads['weight']
+            model.lin_mod1.params['bias'] = model.lin_mod1.params['bias'] - lr * model.lin_mod1.grads['bias']
+            model.lin_mod2.params['weight'] = model.lin_mod2.params['weight'] - lr * model.lin_mod2.grads['weight']
+            model.lin_mod2.params['bias'] = model.lin_mod2.params['bias'] - lr * model.lin_mod2.grads['bias']
+            
+            # setting gradients back to zero was necessary in torch but should not be necessary here, since we do `self.grads['bias'] = ..` rather than +=
+            model.clear_cache() # reset all cached values from feedforward
+
+        # get validation accuracy
+        val_accuracy = evaluate_model(model, val_loader)
+        logging_dict['val_losses'].append(loss.item())
+        val_accuracies.append(val_accuracy)
+        print(f"\nValidation accuracy at epoch {epoch}: {val_accuracy}")
+
+        if best_model is None or val_accuracy > best_val_accuracy:
+            best_val_accuracy = val_accuracy
+            best_model = deepcopy(model) # this is what the hint suggested
+
+    print("Training finished. Evaluating on test set...")
+    test_accuracy = evaluate_model(best_model, test_loader)
+    print(f"Best Validation Accuracy achieved: {best_val_accuracy:.4f}")
+    print(f"Test Accuracy of best model: {test_accuracy:.4f}")
+    
     #######################
     # END OF YOUR CODE    #
     #######################

@@ -113,10 +113,10 @@ class MLP(object):
         da1_elu = self.lin_mod2.backward(dout=dz2)
 
         # calculate dz1
-        self.elu.backward(dout=da1_elu) # updates W1 - not saving to dz1, because that takes up more memory
+        dz1 = self.elu.backward(dout=da1_elu)
 
         # we COULD calculate dx here, but don't need to because all weights and biases have been updated
-        # dx = self.lin_mod1.backward(dout=dz1) # leave commented out
+        _ = self.lin_mod1.backward(dout=dz1)
 
         #######################
         # END OF YOUR CODE    #
