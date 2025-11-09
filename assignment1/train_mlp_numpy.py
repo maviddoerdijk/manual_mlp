@@ -27,8 +27,9 @@ import os
 from tqdm.auto import tqdm
 from copy import deepcopy
 from mlp_numpy import MLP
-from modules import CrossEntropyModule
+from modules import CrossEntropyModule, LinearModule # need LinearModule for checking if we need to do backprop
 import cifar10_utils
+import matplotlib.pyplot as plt
 
 import torch
 
@@ -46,18 +47,10 @@ def accuracy(predictions, targets):
       accuracy: scalar float, the accuracy of predictions between 0 and 1,
                 i.e. the average correct predictions over the whole batch
     """
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
     pred_labels = np.argmax(predictions, axis=1)
     correct = np.equal(pred_labels, targets).sum().item()
     
     accuracy = correct / len(targets)
-    #######################
-    # END OF YOUR CODE    #
-    #######################
-
     return accuracy
 
 
@@ -69,18 +62,8 @@ def evaluate_model(model, data_loader):
       model: An instance of 'MLP', the model to evaluate.
       data_loader: The data loader of the dataset to evaluate.
     Returns:
-      avg_accuracy: scalar float, the average accuracy of the model on the dataset.
-
-    TODO:
-    Implement evaluation of the MLP model on a given dataset.
-
-    Hint: make sure to return the average accuracy of the whole dataset, 
-          independent of batch sizes (not all batches might be the same size).
+      avg_accuracy: scalar float, the average accuracy of the model on the dataset..
     """
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
     total_correct = 0
     total_samples = 0
 
@@ -94,10 +77,6 @@ def evaluate_model(model, data_loader):
         total_samples += len(labels)
 
     avg_accuracy = total_correct / total_samples
-
-    #######################
-    # END OF YOUR CODE    #
-    #######################
 
     return avg_accuracy
 
@@ -121,17 +100,6 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
                      performed best on the validation. Between 0.0 and 1.0
       logging_dict: An arbitrary object containing logging information. This is for you to 
                     decide what to put in here.
-
-    TODO:
-    - Implement the training of the MLP model. 
-    - Evaluate your model on the whole validation set each epoch.
-    - After finishing training, evaluate your model that performed best on the validation set, 
-      on the whole test dataset.
-    - Integrate _all_ input arguments of this function in your training. You are allowed to add
-      additional input argument if you assign it a default value that represents the plain training
-      (e.g. '..., new_param=False')
-
-    Hint: you can save your best model by deepcopy-ing it.
     """
 
     # Set the random seeds for reproducibility
@@ -142,10 +110,6 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     cifar10 = cifar10_utils.get_cifar10(data_dir)
     cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
                                                   return_numpy=True)
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
 
     train_loader = cifar10_loader['train']
     val_loader = cifar10_loader['validation']
@@ -158,55 +122,51 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
 
     val_accuracies = []
     logging_dict = {
-        'train_accuracies': [],
         'train_losses': [],
         'val_accuracies': [],
-        'val_losses': []
     }
     best_model = None # we need to return the model that worked best on dataset
     best_val_accuracy = 0.0
 
     for epoch in tqdm(range(epochs)):
+        epoch_loss = 0.0
+        num_samples = 0
+
         for inputs, labels in train_loader:
             inputs = inputs.reshape(inputs.shape[0],-1) # [B, 3, 32, 32] -> [B, 3*32*32]
             preds = model(inputs) # call model directly because we implemented the __call__ function ourselves so that it works like pytorch
             loss = loss_module.forward(preds, labels) # softmax output -> CE loss
-
             acc = accuracy(preds, labels)
-            logging_dict['train_accuracies'].append(acc)
-            logging_dict['train_losses'].append(loss.item())
+            epoch_loss += loss * len(labels)
+            num_samples += len(labels)
 
             # backprop
             loss_gradient = loss_module.backward(preds, labels) # gradient of loss w.r.t. softmax output
             _ = model.backward(loss_gradient) # should do backprop and update all weights accordingly
-            # update gradients - update after entire batch
-            model.lin_mod1.params['weight'] = model.lin_mod1.params['weight'] - lr * model.lin_mod1.grads['weight']
-            model.lin_mod1.params['bias'] = model.lin_mod1.params['bias'] - lr * model.lin_mod1.grads['bias']
-            model.lin_mod2.params['weight'] = model.lin_mod2.params['weight'] - lr * model.lin_mod2.grads['weight']
-            model.lin_mod2.params['bias'] = model.lin_mod2.params['bias'] - lr * model.lin_mod2.grads['bias']
             
-            # setting gradients back to zero was necessary in torch but should not be necessary here, since we do `self.grads['bias'] = ..` rather than +=
-            model.clear_cache() # reset all cached values from feedforward
+            # update gradients after entire batch (dynamic way, allows any number of LinearModules)
+            for layer in model.features:
+                if isinstance(layer, LinearModule):
+                    for param_name in layer.params: # bias and weight
+                        layer.params[param_name] -= lr * layer.grads[param_name]
 
+        avg_train_loss = epoch_loss / num_samples
+        logging_dict['train_losses'].append(avg_train_loss.item())
+          
         # get validation accuracy
         val_accuracy = evaluate_model(model, val_loader)
-        logging_dict['val_losses'].append(loss.item())
         val_accuracies.append(val_accuracy)
         print(f"\nValidation accuracy at epoch {epoch}: {val_accuracy}")
 
         if best_model is None or val_accuracy > best_val_accuracy:
             best_val_accuracy = val_accuracy
-            best_model = deepcopy(model) # this is what the hint suggested
+            model.clear_cache() # remove all cached values before saving model
+            best_model = deepcopy(model)
 
     print("Training finished. Evaluating on test set...")
     test_accuracy = evaluate_model(best_model, test_loader)
     print(f"Best Validation Accuracy achieved: {best_val_accuracy:.4f}")
     print(f"Test Accuracy of best model: {test_accuracy:.4f}")
-    
-    #######################
-    # END OF YOUR CODE    #
-    #######################
-
     return model, val_accuracies, test_accuracy, logging_dict
 
 
@@ -235,6 +195,28 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
+    model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
     # Feel free to add any additional functions, such as plotting of the loss curve here
+
     
+    plt.figure(figsize=(12, 5))
+
+    # train loss
+    plt.subplot(1, 2, 1)
+    plt.plot(logging_dict['train_losses'], label='Train Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training Loss vs. Epochs')
+    plt.legend()
+
+    # val accuracy
+    plt.subplot(1, 2, 2)
+    plt.plot(val_accuracies, label='Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Validation Accuracy vs. Epochs')
+    plt.legend()
+    plt.tight_layout() 
+    plt.show()
+    
+    print(f"Final Test Accuracy: {test_accuracy:.4f}")

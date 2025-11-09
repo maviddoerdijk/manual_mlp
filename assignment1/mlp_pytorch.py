@@ -48,42 +48,41 @@ class MLP(nn.Module):
           use_batch_norm: If True, add a Batch-Normalization layer in between
                           each Linear and ELU layer.
         """
-
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
         super(MLP, self).__init__() # inherit everything from nn.Module
+
+
         features = []
-        features.append(nn.Linear(in_features=n_inputs, out_features=n_hidden[0]))
-        if use_batch_norm:
-            features.append(nn.BatchNorm1d(num_features=n_hidden[0])) # add batchnorm after fc layer, before activation layer
-        features.append(nn.ELU(alpha=1.0))
-        for i in range(len(n_hidden) - 1): # map from i to i-1 (last iteration maps from n_hidden[-2] to n_hidden[-1])
-            features.append(nn.Linear(in_features=n_hidden[i], out_features=n_hidden[i+1]))
+        if not n_hidden:
+            features.append(nn.Linear(in_features=n_inputs, out_features=n_classes)) # without hidden layers, just map from n_inputs to n_classes
+        else:
+            features.append(nn.Linear(in_features=n_inputs, out_features=n_hidden[0]))
             if use_batch_norm:
-                features.append(nn.BatchNorm1d(num_features=n_hidden[i+1])) # add batchnorm after fc layer, before activation layer
+                features.append(nn.BatchNorm1d(num_features=n_hidden[0])) # add batchnorm after fc layer, before activation layer
             features.append(nn.ELU(alpha=1.0))
-        features.append(nn.Linear(in_features=n_hidden[-1], out_features=n_classes)) # # add one last mapping from n_hidden[-1] to n_classes. Note: This outputs logits for each class, rather than softmax probabilities. This is fine as the nn.CrossEntropyLoss expects logits. 
+            for i in range(len(n_hidden) - 1): # map from i to i-1 (last iteration maps from n_hidden[-2] to n_hidden[-1])
+                features.append(nn.Linear(in_features=n_hidden[i], out_features=n_hidden[i+1]))
+                if use_batch_norm:
+                    features.append(nn.BatchNorm1d(num_features=n_hidden[i+1])) # add batchnorm after fc layer, before activation layer
+                features.append(nn.ELU(alpha=1.0))
+            features.append(nn.Linear(in_features=n_hidden[-1], out_features=n_classes)) # # add one last mapping from n_hidden[-1] to n_classes. Note: This outputs logits for each class, rather than softmax probabilities. This is fine as the nn.CrossEntropyLoss expects logits. 
         self.features = nn.Sequential(*features)
 
         # initialize weights and biases as requested
         j = 0
-        for m in features:
-            if isinstance(m, nn.Linear):
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias) # also according to ed
+        for layer in features:
+            if isinstance(layer, nn.Linear):
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias) # also according to ed
                 if j == 0:
                   # logic uses std = gain / sqrt(fan_mode). a = 1.0 -> gain = sqrt(2/(1+a^2)) = 1 -> magic_number = gain^2 = 1   
-                  nn.init.kaiming_normal_(m.weight, nonlinearity='leaky_relu', a=1.0)
+                  nn.init.kaiming_normal_(layer.weight, nonlinearity='leaky_relu', a=1.0)
                 else:
                   # relu -> a=0 -> gain = sqrt( 2 / (1+a^2) ) = sqrt(2) -> gain^2 = magic_number = 2
-                  nn.init.kaiming_normal_(m.weight, nonlinearity='relu') # Ed discussion mentions we should do it this way
+                  nn.init.kaiming_normal_(layer.weight, nonlinearity='relu') # Ed discussion mentions we should do it this way
             j += 1
 
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
     def forward(self, x):
         """
@@ -96,14 +95,10 @@ class MLP(nn.Module):
           out: outputs of the network
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         out = self.features(x) # pass forward through all features, returns logits
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return out
 

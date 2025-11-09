@@ -46,25 +46,21 @@ class MLP(object):
                      output dimensions of the MLP
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        # Linear module - maps from n_inputs(=10) to n_hidden(=128)
-        self.lin_mod1 = LinearModule(in_features=n_inputs, out_features=n_hidden[0], input_layer=True) # TODO: not sure what kind of difference input layer makes, likely only has to do with initialization of weights?
 
-        # ELU
-        self.elu = ELUModule(alpha=1) # TODO: Make choice on (1) hard-code alpha (2 - favorite ) be able to choose it in init as hyperparam (3) other?
-        # Note: pytorch uses standard value of alpha=1, so we use that here as well.
+        # Linear module - maps from n_inputs(=10) to n_hidden(=128)
+        self.features = []
+        self.features.append(LinearModule(in_features=n_inputs, out_features=n_hidden[0], input_layer=True))
+        self.features.append(ELUModule(alpha=1)) # Note: pytorch uses standard value of alpha=1, so we use that here as well. No reason to dynamically choose alpha with kwarg for this assigmnent.
+
+        for i in range(len(n_hidden) - 1): # map from i to i-1 (last iteration maps from n_hidden[-2] to n_hidden[-1])
+            self.features.append(LinearModule(in_features=n_hidden[i], out_features=n_hidden[i+1]))
+            self.features.append(ELUModule(alpha=1.0))
 
         # Linear module - maps from n_hidden(=128) to n_classes(=5)
-        self.lin_mod2 = LinearModule(in_features=n_hidden[0], out_features=n_classes)
-
+        self.features.append(LinearModule(in_features=n_hidden[0], out_features=n_classes))
         # Softmax activation
-        self.softmax = SoftMaxModule()
+        self.features.append(SoftMaxModule())
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
 
     def __call__(self, args, *kwargs):
         return self.forward(args, *kwargs) # custom call to make our class more similar to pytorch
@@ -79,19 +75,9 @@ class MLP(object):
         Returns:
           out: outputs of the network
         """
-
-        # Linear module - maps from n_inputs(=10) to n_hidden(=128)
-        z1 = self.lin_mod1.forward(x)
-
-        # ELU
-        a1_elu = self.elu.forward(z1)
-
-        # Linear module - maps from n_hidden(=128) to n_classes(=5)
-        z2 = self.lin_mod2.forward(a1_elu)
-
-        # Softmax activation
-        out = self.softmax.forward(z2)       
-
+        out = x
+        for feature in self.features:
+            out = feature.forward(out)  
         return out
 
     def backward(self, dout):
@@ -102,39 +88,28 @@ class MLP(object):
           dout: gradients of the loss
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        ####################### 
+        for feature in reversed(self.features):
+          dout = feature.backward(dout=dout)
                 
-        # calculate dz2
-        dz2 = self.softmax.backward(dout=dout) # updates W2
+        # # calculate dz2
+        # dz2 = self.softmax.backward(dout=dout) # updates W2
 
-        # calculate d a1_elu
-        da1_elu = self.lin_mod2.backward(dout=dz2)
+        # # calculate d a1_elu
+        # da1_elu = self.lin_mod2.backward(dout=dz2)
 
-        # calculate dz1
-        dz1 = self.elu.backward(dout=da1_elu)
+        # # calculate dz1
+        # dz1 = self.elu.backward(dout=da1_elu)
 
-        # we COULD calculate dx here, but don't need to because all weights and biases have been updated
-        _ = self.lin_mod1.backward(dout=dz1)
+        # # we COULD calculate dx here, but don't need to because all weights and biases have been updated
+        # _ = self.lin_mod1.backward(dout=dz1)
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
     def clear_cache(self):
         """
         Remove any saved tensors for the backward pass from any module.
         Used to clean-up model from any remaining input data when we want to save it.
         """
-        
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        self.lin_mod1.clear_cache()
-        self.lin_mod2.clear_cache()
-        self.elu.clear_cache()
-        self.softmax.clear_cache
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
+        for feature in self.features:
+            feature.clear_cache()

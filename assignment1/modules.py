@@ -33,11 +33,6 @@ class LinearModule(object):
           in_features: size of each input sample
           out_features: size of each output sample
           input_layer: boolean, True if this is the first layer after the input, else False.
-
-        TODO:
-        Hint: the input_layer argument might be needed for the initialization
-
-        Also, initialize gradients with zeros.
         """
 
         # Note: For the sake of this assignment, please store the parameters
@@ -45,9 +40,6 @@ class LinearModule(object):
         self.params = {'weight': None, 'bias': None} # Model parameters
         self.grads = {'weight': None, 'bias': None} # Gradients
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
 
         # initialize a weight matrix of zeros that maps from (X x in_features) to (X x out_features)
         kaiming_mean = 0
@@ -61,14 +53,12 @@ class LinearModule(object):
         self.params['bias'] = B
 
         ## gradients
-        self.grads['weight'] = None
-        self.grads['bias'] = None
+        self.grads['weight'] = np.zeros(shape=(out_features, in_features))
+        self.grads['bias'] = np.zeros(shape=(out_features, ))
 
         self.cache = None
         
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
     def forward(self, x):
         """
@@ -80,18 +70,14 @@ class LinearModule(object):
           out: output of the module
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
 
         # z = xW^T + b
         out = x @ self.params['weight'].T + self.params['bias']  # shape (batch_size, out_features)
         
         self.cache = x # store, because we will later do backward pass using d../d.. = ...
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return out
 
@@ -105,26 +91,24 @@ class LinearModule(object):
           dx: gradients with respect to the input of the module
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         X = self.cache
         W = self.params['weight']
 
         ## Update parameters
         # param 1: dL/dW = dZ/dW . dL/dZ = A^T . dout
         self.grads['weight'] = dout.T @ X
+        # Note: I will assume we are not expected to accumulate gradients, even though it is default pytorch behavior. Because we are not given a function for resetting gradients to zero.  
 
         # param 2: dL/dB = dL/dZ . dZ/dB = (1 1 ... 1)^T . dout
         self.grads['bias'] = np.sum(dout, axis=0)  # sum over batch dimension
+
 
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dL/dZ = dL/dout . dout/dZ = dout . W
         dx = dout @ W
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
         return dx
 
     def clear_cache(self):
@@ -132,14 +116,7 @@ class LinearModule(object):
         Remove any saved tensors for the backward pass.
         Used to clean-up model from any remaining input data when we want to save it.
         """
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
         self.cache = None
-        #######################
-        # END OF YOUR CODE    #
-        #######################
-
 
 class ELUModule(object):
     """
@@ -159,16 +136,12 @@ class ELUModule(object):
           out: output of the module
         """
         
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         out = np.where(x > 0, x, self.alpha * (np.exp(x) - 1)) # following formula found in https://www.geeksforgeeks.org/deep-learning/elu-activation-function-in-neural-network/
 
         self.cache = x
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return out
 
@@ -181,9 +154,7 @@ class ELUModule(object):
           dx: gradients with respect to the input of the module
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         Z = self.cache
 
         local_grad = np.where(Z > 0, 1, self.alpha * np.exp(Z))
@@ -192,9 +163,7 @@ class ELUModule(object):
         # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = ...
         dx = np.multiply(dout, local_grad)
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
         return dx
 
     def clear_cache(self):
@@ -202,13 +171,9 @@ class ELUModule(object):
         Remove any saved tensors for the backward pass.
         Used to clean-up model from any remaining input data when we want to save it.
         """
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         self.cache = None
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
 
 class SoftMaxModule(object):
@@ -225,9 +190,7 @@ class SoftMaxModule(object):
           out: output of the module
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         def shift_and_exp(x):
           shift_value = np.max(x) # shift by scalar b such that the softmax output becomes shift-invariant
           y = np.exp(x - shift_value) # reasonable choice according to https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/
@@ -244,9 +207,7 @@ class SoftMaxModule(object):
         out = x_shifted_and_exp / x_shifted_and_exp_row_sum_matrix
         
         self.cache = out
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return out
 
@@ -259,18 +220,14 @@ class SoftMaxModule(object):
           dx: gradients with respect to the input of the module
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
         s = self.cache
         dot_product = np.sum(dout * s, axis=1, keepdims=True)
         dx = s * (dout - dot_product)
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return dx
 
@@ -278,17 +235,10 @@ class SoftMaxModule(object):
         """
         Remove any saved tensors for the backward pass.
         Used to clean-up model from any remaining input data when we want to save it.
-
-        TODO:
-        Set any caches you have to None.
         """
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         self.cache = None
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
 
 class CrossEntropyModule(object):
@@ -306,9 +256,7 @@ class CrossEntropyModule(object):
           out: cross entropy loss
         """
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         # turn y into a one-hot encoded matrix with same shape as x
         batch_size = x.shape[0]
         n_classes = x.shape[1]
@@ -320,9 +268,7 @@ class CrossEntropyModule(object):
         # get loss for each sample in the batch
         out = - np.sum(ce_entries) / batch_size 
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return out
 
@@ -341,15 +287,11 @@ class CrossEntropyModule(object):
         Y_onehot = np.eye(n_classes)[y] 
         batch_size = x.shape[0]
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
         dx = -(Y_onehot / Y_pred) / batch_size
 
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
 
         return dx

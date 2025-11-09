@@ -32,6 +32,8 @@ import cifar10_utils
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import matplotlib.pyplot as plt
+
 
 
 def accuracy(predictions, targets):
@@ -47,21 +49,11 @@ def accuracy(predictions, targets):
       accuracy: scalar float, the accuracy of predictions,
                 i.e. the average correct predictions over the whole batch
     """
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-
     # Get the predicted class index by finding the max logit
     pred_labels = torch.argmax(predictions, dim=1) # use dim=1 to get max per row (find )
     correct = pred_labels.eq(targets).sum().item()
     
     accuracy = correct / len(targets)
-
-    #######################
-    # END OF YOUR CODE    #
-    #######################
-    
     return accuracy
 
 
@@ -76,16 +68,14 @@ def evaluate_model(model, data_loader):
       avg_accuracy: scalar float, the average accuracy of the model on the dataset.
     """
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-
     total_correct = 0
     total_samples = 0
     model.eval()
     
     with torch.no_grad():
         for inputs, targets in data_loader:
+            inputs = inputs.to(model.device) # no access to device directly, so use model's device property
+            targets = targets.to(model.device)
             inputs = inputs.view(inputs.size(0), -1) # flatten from standard [B, 3, 32, 32] (CIFAR-10) to [B, 3*32*32]
             
             predictions = model(inputs)
@@ -96,11 +86,6 @@ def evaluate_model(model, data_loader):
             total_samples += len(targets)
             
         avg_accuracy = total_correct / total_samples # use total samples so that the average accuracy is independent of batch size
-
-    #######################
-    # END OF YOUR CODE    #
-    #######################
-    
     return avg_accuracy
 
 
@@ -142,26 +127,21 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     cifar10 = cifar10_utils.get_cifar10(data_dir)
     cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
                                                   return_numpy=False)
-
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
+    
     train_loader = cifar10_loader['train']
     val_loader = cifar10_loader['validation']
     test_loader = cifar10_loader['test']
     
     n_inputs = 32*32*3 # should be okay to hardcode, since it's common knowledge that CIFAR is RGB of 32x32 images
     n_classes = 10
-    model = MLP(n_inputs=n_inputs, n_hidden=hidden_dims, n_classes=n_classes, use_batch_norm=use_batch_norm)
+    model = MLP(n_inputs=n_inputs, n_hidden=hidden_dims, n_classes=n_classes, use_batch_norm=use_batch_norm).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=lr)
     
     val_accuracies = []
     logging_dict = {
-        'train_accuracies': [],
         'train_losses': [],
         'val_accuracies': [],
-        'val_losses': []
     }
     best_model = None # we need to return the model that worked best on dataset
     best_val_accuracy = 0.0
@@ -169,7 +149,14 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     # Training loop including validation
     for epoch in tqdm(range(epochs)):
       model.train()
+      epoch_loss = 0.0
+      num_samples = 0
+
       for train_inputs, labels in train_loader:
+          # set to correct device
+          train_inputs = train_inputs.to(device)
+          labels = labels.to(device)
+
           # flatten inputs
           train_inputs = train_inputs.view(train_inputs.size(0), -1) # flatten from [B, 3, 32, 32] to [B, 3*32*32]
           optimizer.zero_grad() # reset gradients
@@ -180,13 +167,13 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
           loss.backward() # compute gradients
           optimizer.step() # update weights (optimizer was given model.parameters())
           acc = accuracy(preds, labels)
-          logging_dict['train_accuracies'].append(acc)
-          logging_dict['train_losses'].append(loss.item())
-      # avg_train_loss = epoch_loss / num_samples # seems like a weird way
-
+          epoch_loss += loss.item() * train_inputs.size(0) # accumulate total loss over epoch
+          num_samples += train_inputs.size(0)
+          
+      avg_train_loss = epoch_loss / num_samples # seems like a weird way
+      logging_dict['train_losses'].append(avg_train_loss)
       
       val_accuracy = evaluate_model(model, val_loader)
-      logging_dict['val_losses'].append(loss.item())
       val_accuracies.append(val_accuracy) 
       print(f"\nValidation accuracy at epoch {epoch}: {val_accuracy}")
 
@@ -203,10 +190,6 @@ def train(hidden_dims, lr, use_batch_norm, batch_size, epochs, seed, data_dir):
     logging_dict['val_accuracies'] = val_accuracies
 
     model = best_model
-    #######################
-    # END OF YOUR CODE    #
-    #######################
-
     return model, val_accuracies, test_accuracy, logging_dict
 
 
@@ -237,6 +220,27 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
+    model, val_accuracies, test_accuracy, logging_dict = train(**kwargs)
     # Feel free to add any additional functions, such as plotting of the loss curve here
     
+    plt.figure(figsize=(12, 5))
+
+    # train loss
+    plt.subplot(1, 2, 1)
+    plt.plot(logging_dict['train_losses'], label='Train Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training Loss vs. Epochs')
+    plt.legend()
+
+    # val accuracy
+    plt.subplot(1, 2, 2)
+    plt.plot(val_accuracies, label='Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Validation Accuracy vs. Epochs')
+    plt.legend()
+    plt.tight_layout() 
+    plt.show()
+    
+    print(f"Final Test Accuracy: {test_accuracy:.4f}")
