@@ -57,7 +57,7 @@ class MLP(object):
             self.features.append(ELUModule(alpha=1.0))
 
         # Linear module - maps from n_hidden(=128) to n_classes(=5)
-        self.features.append(LinearModule(in_features=n_hidden[0], out_features=n_classes))
+        self.features.append(LinearModule(in_features=n_hidden[-1], out_features=n_classes))
         # Softmax activation
         self.features.append(SoftMaxModule())
 

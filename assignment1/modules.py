@@ -192,19 +192,16 @@ class SoftMaxModule(object):
 
 
         def shift_and_exp(x):
-          shift_value = np.max(x) # shift by scalar b such that the softmax output becomes shift-invariant
+          shift_value = np.max(x, axis=1, keepdims=True) # stabilize by subtracting max value per row (=per sample)
           y = np.exp(x - shift_value) # reasonable choice according to https://timvieira.github.io/blog/post/2014/02/11/exp-normalize-trick/
           return y
 
         # 1. get matrix of row sums of same shape as x
         x_shifted_and_exp = shift_and_exp(x) # e to the power each entry
         x_shifted_and_exp_row_sum = np.sum(x_shifted_and_exp, axis=1, keepdims=True) # sum over exponents, should collapse from (S x N) to (S, )
-        x_shifted_and_exp_row_sum_matrix = np.hstack((x_shifted_and_exp_row_sum, ) * x.shape[1]) # populate with N times the second dim (many times the same sum of exponents)
-
-        # 2. do pair-wise division of x by matrix_row_sum
-        if x_shifted_and_exp.shape != x_shifted_and_exp_row_sum_matrix.shape:
-            raise ValueError("Mistake in implementation: Shape of input does not match shape of element-wise division for softmax.")
-        out = x_shifted_and_exp / x_shifted_and_exp_row_sum_matrix
+        
+        # 2. do pair-wise division of x by matrix_row_sum (use broadcasting for efficiency, rather than hstacking)
+        out = x_shifted_and_exp / x_shifted_and_exp_row_sum
         
         self.cache = out
 
@@ -290,7 +287,8 @@ class CrossEntropyModule(object):
 
         ## Compute dx, the gradient that will be passed further to the previous layer
         # dx = (in more complete syntax) dL/dx = dL/dout . dout/dx = (Y_pred - Y_onehot) / batch_size
-        dx = -(Y_onehot / Y_pred) / batch_size
+        epsilon = 1e-8 # to avoid division by zero
+        dx = -(Y_onehot / (Y_pred + epsilon)) / batch_size
 
 
 
